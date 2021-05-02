@@ -1,8 +1,13 @@
+import argparse
+import pickle
+
+import pandas as pd
 from kerastuner import HyperModel, BayesianOptimization
+from sklearn.preprocessing import MinMaxScaler
 from tensorflow.python.keras.callbacks import EarlyStopping
 from tensorflow.python.keras.layers import Conv1D, MaxPooling1D, \
     AveragePooling1D, GlobalMaxPooling1D, Dense, Dropout
-from tensorflow.python.keras.models import Sequential
+from tensorflow.python.keras.models import Sequential, load_model
 from tensorflow.python.keras.optimizer_v2.adam import Adam
 
 
@@ -111,6 +116,34 @@ class HyperDetectionModel(HyperModel):
         return model
 
 
+def prepare_data(data_path, frac=0.7, seed=4):
+    columns = list(map(str, range(24))) + ['label']
+    price_data = pd.read_table(data_path, sep=',', names=columns)
+
+    train = price_data.sample(frac=frac, random_state=seed)
+    train_label = train.pop('label')
+    df = price_data.drop(train.index)
+    validation = df.sample(frac=0.5, random_state=seed)
+    validation_label = validation.pop('label')
+    test = df.drop(validation.index)
+    test_label = test.pop('label')
+
+    scaler = MinMaxScaler()
+    scaled_train = scaler.fit_transform(train)
+    scaled_validation = scaler.transform(validation)
+    scaled_test = scaler.transform(test)
+
+    processed_data = {'train': (
+        scaled_train.reshape(scaled_train.shape[0], 24, 1),
+        train_label.to_numpy()), 'val': (
+        scaled_validation.reshape(scaled_validation.reshape[0], 24, 1),
+        validation_label.to_numpy()), 'test': (
+        scaled_test.reshape(scaled_test.shape[0], 24, 1),
+        test_label.to_numpy())}
+
+    return processed_data
+
+
 def get_hypertuner(settings=None):
     """
 
@@ -139,9 +172,12 @@ def get_hypertuner(settings=None):
     return tuner
 
 
-def search_hyperparameters(tuner, train, validation, epochs=150):
+def search_hyperparameters(tuner, train, validation, epochs=150,
+                           model_name='model'):
     """
 
+    :param model_name: name of the best model to be saved (as path)
+    :type model_name: str
     :param tuner: tuner used in hyperparameters search
     :type tuner: Tuner
     :param train: tuple of input data and labels for training
@@ -161,5 +197,37 @@ def search_hyperparameters(tuner, train, validation, epochs=150):
                  callbacks=[EarlyStopping(monitor='val_loss', patience=3)])
 
     best_model = tuner.get_best_models()[0]
+    best_model.save(model_name)
 
     return best_model
+
+
+def classify_price(model, prices):
+    results = (model.predict(prices) > 0.5).astype("int8")
+    return results
+
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-p', '--predict', action='store_true',
+                    help='predict unlabelled data')
+    ap.add_argument('-d', '--data', type=str,
+                    help='file containing pricing data')
+    ap.add_argument('-s', '--scaler', type=str,
+                    help='pickle file containing the scaler for the data')
+    args = ap.parse_args()
+
+    if args.predict:
+        model = load_model('model')
+        scaler = pickle.load(open(args.scaler, 'rb'))
+        price_data = pd.read_table(args.data, sep=',')
+        scaled_data = scaler.transform(price_data)
+        prediction = classify_price(model,
+                                    scaled_data.reshape(scaled_data.shape[0],
+                                                        24, 1))
+
+    else:
+        data_dict = prepare_data(args.data)
+        tuner = get_hypertuner()
+        best_model = search_hyperparameters(tuner, data_dict['train'],
+                                            data_dict['validation'])
