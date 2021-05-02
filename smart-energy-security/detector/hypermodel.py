@@ -150,6 +150,8 @@ def search_hyperparameters(tuner, train, validation, epochs=150):
     :type validation: tuple
     :param epochs: maximum number of training epochs (default 150)
     :type epochs: int
+    :return: best model found by the Tuner
+    :rtype: Sequential
     """
     train_data, train_label = train
     validation_data, validation_label = validation
@@ -157,3 +159,7 @@ def search_hyperparameters(tuner, train, validation, epochs=150):
     tuner.search(train_data, train_label, epochs=epochs,
                  validation_data=(validation_data, validation_label),
                  callbacks=[EarlyStopping(monitor='val_loss', patience=3)])
+
+    best_model = tuner.get_best_models()[0]
+
+    return best_model
