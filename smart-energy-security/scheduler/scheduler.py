@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from scipy.optimize import linprog
 
 
@@ -21,3 +22,10 @@ def schedule(input_df, cost, method='simplex'):
                      A_eq=energy_consumptions, b_eq=energy_demands,
                      method=method)
     return result
+
+
+def plot_consumption(consumption_matrix):
+    df = pd.DataFrame(consumption_matrix)
+    df.plot.bar(stacked=True, color='blue', figsize=(10, 4),
+                xlabel='Hour of the day', ylabel='Energy consumption',
+                legend=False)
