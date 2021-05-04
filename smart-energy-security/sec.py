@@ -62,11 +62,9 @@ def main():
                                         sys.argv,
                                help='file containing scheduling requirements '
                                     'that has to be satisfied')
-    schedule_args.add_argument('-p', '--pricing', type=str,
-                               required=('--schedule' in sys.argv or '-S' in
-                                         sys.argv) and not ('--detect' in
-                                                            sys.argv or '-D' in
-                                                            sys.argv),
+    schedule_args.add_argument('-p', '--pricing', type=str, required=(
+                                                                                 '--schedule' in sys.argv or '-S' in sys.argv) and not (
+                '--detect' in sys.argv or '-D' in sys.argv),
                                help='file containing pricing')
     schedule_args.add_argument('-l', '--label',
                                choices=['none', 'normal', 'abnormal', 'all'],
@@ -97,14 +95,15 @@ def main():
             cost = predicted_data
         requirements = pd.read_excel(args.requirements)
         for idx, c in cost.iterrows():
-            results = sd.schedule(requirements, cost=c.to_numpy().flatten().tolist())
+            results = sd.schedule(requirements,
+                                  cost=c.to_numpy().flatten().tolist())
             results_matrix = results.x.reshape(len(results.x) // 24, 24)
-            sd.plot_consumption(results_matrix, 'fig' + str(idx) + '.png')
-        #print(c.iloc[[1]].to_numpy().flatten().reshape(24, 1))
-        #results = sd.schedule(requirements, cost=c.iloc[[1]].to_numpy(
-        # ).flatten().tolist())
-        #results_matrix = results.x.reshape(len(results.x) // 24, 24)
-        #sd.plot_consumption(results_matrix, 'fig.png')
+            sd.plot_consumption(results_matrix, 'fig' + str(
+                idx) + '.png')  # print(c.iloc[[1]].to_numpy().flatten(
+            # ).reshape(24, 1))  # results = sd.schedule(requirements,
+            # cost=c.iloc[[1]].to_numpy(  # ).flatten().tolist())  #
+            # results_matrix = results.x.reshape(len(  # results.x) // 24,
+            # 24)  # sd.plot_consumption(results_matrix,   # 'fig.png')
 
 
 if __name__ == '__main__':

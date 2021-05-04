@@ -117,6 +117,17 @@ class HyperDetectionModel(HyperModel):
 
 
 def prepare_data(data_path, frac=0.7, seed=4):
+    """
+
+    :param data_path:
+    :type data_path:
+    :param frac:
+    :type frac:
+    :param seed:
+    :type seed:
+    :return:
+    :rtype:
+    """
     columns = list(map(str, range(24))) + ['label']
     price_data = pd.read_table(data_path, sep=',', names=columns)
 

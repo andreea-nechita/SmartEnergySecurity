@@ -4,6 +4,17 @@ from scipy.optimize import linprog
 
 
 def schedule(input_df, cost, method='simplex'):
+    """
+
+    :param input_df: input DataFrame
+    :type input_df: DataFrame
+    :param cost:
+    :type cost: list
+    :param method:
+    :type method: str
+    :return: OptimizeResult of the computed scheduling
+    :rtype: OptimizeResult
+    """
     task_count = len(input_df)
     total_cost = cost * task_count
     energy_consumptions = np.zeros((task_count, 24 * task_count), dtype=int)
@@ -25,6 +36,13 @@ def schedule(input_df, cost, method='simplex'):
 
 
 def plot_consumption(consumption_matrix, path=None):
+    """
+
+    :param consumption_matrix:
+    :type consumption_matrix:
+    :param path: path to save the plot
+    :type path: str
+    """
     df = pd.DataFrame(consumption_matrix)
     ax = df.plot.bar(stacked=True, color='blue', figsize=(10, 5.5),
                      legend=False)
