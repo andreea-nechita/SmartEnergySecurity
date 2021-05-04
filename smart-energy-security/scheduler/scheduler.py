@@ -24,8 +24,13 @@ def schedule(input_df, cost, method='simplex'):
     return result
 
 
-def plot_consumption(consumption_matrix):
+def plot_consumption(consumption_matrix, path=None):
     df = pd.DataFrame(consumption_matrix)
-    df.plot.bar(stacked=True, color='blue', figsize=(10, 4),
-                xlabel='Hour of the day', ylabel='Energy consumption',
-                legend=False)
+    ax = df.plot.bar(stacked=True, color='blue', figsize=(10, 5.5),
+                     legend=False)
+    ax.set_xlabel('Hour of the day', labelpad=7.5)
+    ax.set_ylabel('Energy consumption', labelpad=7.5)
+
+    if path is not None:
+        fig = ax.get_figure()
+        fig.savefig(path)
