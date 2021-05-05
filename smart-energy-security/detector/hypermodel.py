@@ -24,10 +24,12 @@ class HyperDetectionModel(HyperModel):
                    padding=hp.Choice('padding_0', ['valid', 'same']),
                    activation='relu', input_shape=(24, 1), name='conv1d_0'))
 
+        # hyperparameter for whether to include or not a Pooling layer
         if hp.Boolean('pooling_0', default=True):
             # check the input shape of this layer to decide the limits of
             # the hyperparameters
             input_size_pooling0 = model.get_layer('conv1d_0').output.shape[1]
+            # hyperparameter for choosing the type of pooling (max or average)
             if hp.Boolean('max_pooling_0', default=True):
                 model.add(MaxPooling1D(pool_size=hp.Int('max_pool_size_0',
                                                         min_value=min(2,
@@ -70,6 +72,7 @@ class HyperDetectionModel(HyperModel):
                                                parent_values=[False]),
                                            name='avg_pooling1d_0'))
 
+        # hyperparameter for whether to add a second Conv layer
         if hp.Boolean('second_conv_layer', default=True):
             # check which is the previous layer in order to get the input
             # size for the current layer
@@ -82,6 +85,7 @@ class HyperDetectionModel(HyperModel):
                         model.get_layer('avg_pooling1d_0').output.shape[1]
             else:
                 input_size_conv1 = model.get_layer('conv1d_0').output.shape[1]
+
             model.add(Conv1D(
                 filters=hp.Int('conv_filters_1', min_value=2, max_value=90,
                                parent_name='second_conv_layer',
@@ -101,9 +105,11 @@ class HyperDetectionModel(HyperModel):
 
         model.add(GlobalMaxPooling1D())
 
+        # hypertune the fully-connected layers
         for l_fc in range(hp.Int('fc_layers_num', min_value=0, max_value=12)):
             model.add(Dense(units=hp.Int('fc_units_' + str(l_fc), min_value=4,
                                          max_value=50), activation='relu'))
+            # hypertuner for whether to implement dropout for the current layer
             if hp.Boolean('dropout_' + str(l_fc), default=False):
                 model.add(Dropout(hp.Choice('dropout_rate_' + str(l_fc),
                                             [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
@@ -120,14 +126,20 @@ class HyperDetectionModel(HyperModel):
 
 
 def prepare_data(data_path, frac=0.7, seed=4):
-    """
+    """Prepares the data from a CSV-formatted file for training and
+    evaluating a model
 
-    :param data_path:
-    :type data_path:
+    The function implements splitting the data into training, validation and
+    test sets, feature scaling (namely min-max scaling) and processing each
+    set in the format accepted by the model (as defined in
+    HyperDetectionModel class)
+
+    :param data_path: file containing the data
+    :type data_path: str
     :param frac: fraction of the data to be kept for training
     :type frac: float
-    :param seed:
-    :type seed:
+    :param seed: seed for random splitting of the data
+    :type seed: int
     :return: a dictionary of processed input data and labels for training,
     validation and testing sets
     :rtype: dict
@@ -143,15 +155,18 @@ def prepare_data(data_path, frac=0.7, seed=4):
     test = df.drop(validation.index)
     test_label = test.pop('label')
 
+    # scale based on the training set
     scaler = MinMaxScaler()
     scaled_train = scaler.fit_transform(train)
     scaled_validation = scaler.transform(validation)
     scaled_test = scaler.transform(test)
 
+    # reshape data to the input shape accepted by the model (as defined in
+    # HyperDetectionModel class in this module)
     processed_data = {'train': (
         scaled_train.reshape(scaled_train.shape[0], 24, 1),
         train_label.to_numpy()), 'val': (
-        scaled_validation.reshape(scaled_validation.reshape[0], 24, 1),
+        scaled_validation.reshape(scaled_validation.shape[0], 24, 1),
         validation_label.to_numpy()), 'test': (
         scaled_test.reshape(scaled_test.shape[0], 24, 1),
         test_label.to_numpy())}
@@ -172,7 +187,7 @@ def get_hypertuner(settings=None):
     Keras Tuner. Check the documentation for Keras Tuners for more details
     (https://keras-team.github.io/keras-tuner/documentation/tuners/)
 
-    :param settings:
+    :param settings: parameters for the BayesianOptimization Tuner
     :type settings: dict
     :return: hyperparameter tuner based on Bayesian optimisation
     :rtype: BayesianOptimization
@@ -202,7 +217,8 @@ def search_hyperparameters(tuner, train, validation, epochs=150,
     """Finds the best model given a Keras Tuner and the training and
     validation data
 
-    The function saves and returns the best-performing .
+    The function saves and returns the best-performing model found through
+    hyperparameter tuning.
 
     :param model_name: name of the best model to be saved (as path)
     :type model_name: str
@@ -235,12 +251,16 @@ def classify_price(model, prices):
     """Returns a list of binary classes (0 or 1) predicted by a model for
     the given pricing curves
 
-    :param model:
-    :type model:
-    :param prices:
-    :type prices:
-    :return:
-    :rtype:
+    The input pricing data has to be of shape (samples, 24, 1),
+    where 'samples' denotes the number of samples in the input.
+    The returned array is of shape (samples, 1).
+
+    :param model: model used for classification
+    :type model: keras.Model
+    :param prices: pricing curves to be classified
+    :type prices: numpy.ndarray
+    :return: predicted labels
+    :rtype: numpy.ndarray
     """
     # use a 50% threshold for deciding the label
     results = (model.predict(prices) > 0.5).astype("int8")
@@ -253,7 +273,10 @@ if __name__ == '__main__':
                         help='file containing pricing data')
     args = parser.parse_args()
 
+    # preprocess data
     data_dict = prepare_data(args.data)
+    # generate Tuner
     tuner = get_hypertuner()
+    # tune the hyperparameters and get the best model
     best_model = search_hyperparameters(tuner, data_dict['train'],
-                                        data_dict['validation'])
+                                        data_dict['val'])
