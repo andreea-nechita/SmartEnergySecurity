@@ -12,13 +12,14 @@ import scheduler.scheduler as sd
 
 
 def main():
-    os.mkdir(os.path.join(os.path.dirname(Path(__file__)), '../out'))
+    # create relative path to resources directory
     resources_path = os.path.normpath(
         os.path.join(os.path.dirname(Path(__file__)), '../resources'))
-    out_path = os.path.normpath(
-        os.path.join(os.path.dirname(Path(__file__)), '../out'))
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        epilog='All output files are saved in a new directory named "out" ('
+               'in the same directory as the "resources" and the main '
+               'application package)')
     detect_args = parser.add_argument_group('Detection arguments',
                                             description='Detection of '
                                                         'abnormal pricing '
@@ -35,6 +36,7 @@ def main():
                                                           'per hour, energy '
                                                           'demand)')
 
+    # Detection arguments starting here
     detect_args.add_argument('-D', '--detect', action='store_true',
                              required='--schedule' not in sys.argv and '-S'
                                       not in sys.argv,
@@ -56,6 +58,7 @@ def main():
                                   'used)',
                              default=os.path.join(resources_path, 'model'))
 
+    # Scheduling arguments starting here
     schedule_args.add_argument('-S', '--schedule', action='store_true',
                                required='--detect' not in sys.argv and '-D'
                                         not in sys.argv,
@@ -63,60 +66,101 @@ def main():
     schedule_args.add_argument('-r', '--requirements', type=str,
                                required='--schedule' in sys.argv or '-S' in
                                         sys.argv,
-                               help='file containing scheduling requirements '
-                                    'that has to be satisfied')
+                               help='Excel file containing scheduling '
+                                    'requirements that has to be satisfied')
     schedule_args.add_argument('-p', '--pricing', type=str,
                                required=('--schedule' in sys.argv or '-S' in
                                          sys.argv) and not ('--detect' in
                                                             sys.argv or '-D'
                                                             in sys.argv),
-                               help='file containing pricing')
+                               help='csv file containing pricing data')
     schedule_args.add_argument('-l', '--label', type=str,
                                choices=['none', 'normal', 'abnormal', 'all'],
-                               required=False, default='all')
+                               required=False, help='labels to be used in '
+                                                    'scheduling; none '
+                                                    '-- the pricing '
+                                                    'curves do not '
+                                                    'contain any '
+                                                    'label; normal -- '
+                                                    'only pricing curves '
+                                                    'labelled as normal are '
+                                                    'considered; abnormal -- '
+                                                    'only pricing curves '
+                                                    'labelled as abnormal '
+                                                    'are considered; all -- '
+                                                    'pricing curves are '
+                                                    'labelled and all are '
+                                                    'considered (the default '
+                                                    'option is "all")',
+                               default='all')
     schedule_args.add_argument('--solutions', action='store_true',
-                               required=False)
+                               required=False, help='option for saving '
+                                                    'scheduling results in '
+                                                    '.csv files (separate '
+                                                    'files for each pricing '
+                                                    'curve in the input data)')
 
     args = parser.parse_args()
 
+    # create directory for output files
+    os.mkdir(os.path.join(os.path.dirname(Path(__file__)), '../out'))
+    out_path = os.path.normpath(
+        os.path.join(os.path.dirname(Path(__file__)), '../out'))
+
+    # check if detection mode is selected
     if args.detect:
         model = tf.keras.models.load_model(args.model)
         scaler = pickle.load(open(args.scaler, 'rb'))
         price_data = pd.read_table(args.data, sep=',',
                                    names=list(map(str, range(24))))
+        # scale input data
         scaled_data = scaler.transform(price_data)
+        # reshape the data to be classified into the shape accepted by the
+        # model (i.e. (samples_number, 24, 1))
         prediction = hm.classify_price(model, scaled_data.reshape(
             scaled_data.shape[0], 24, 1)).flatten()
-        predicted_data = pd.concat([price_data, pd.Series(prediction,
-                                                          name='label')],
-                                   axis=1)
+        # add label column
+        predicted_data = pd.concat(
+            [price_data, pd.Series(prediction, name='label')], axis=1)
         predicted_data.to_csv(os.path.join(out_path, 'TestingResults.txt'),
                               header=False, index=False)
 
+    # check if scheduling mode is selected
     if args.schedule:
         os.mkdir(os.path.join(out_path, 'figures'))
         if args.solutions:
             os.mkdir(os.path.join(out_path, 'scheduling'))
         if args.pricing:
             columns = list(map(str, range(24)))
+            # use label column if a pricing option other than 'none' is
+            # mentioned
             if args.label != 'none':
                 columns.append('label')
             cost = pd.read_table(args.pricing, sep=',', names=columns)
+        # use classified guideline prices if detection is also performed
         elif args.detect:
             cost = predicted_data
+        # keep only 0-labelled pricing curves for 'normal' mode
         if args.label == 'normal':
-            #cost = cost.loc[cost['label'] == 0]
             cost.drop(cost.loc[cost['label'] != 0].index, inplace=True)
+        # keep only 1-labelled pricing curves for 'normal' mode
         elif args.label == 'abnormal':
-            #cost = cost.loc[cost['label'] == 1]
             cost.drop(cost.loc[cost['label'] != 1].index, inplace=True)
+        # drop label column as it is no longer needed
         if 'label' in cost.columns:
             cost.drop(columns=['label'], inplace=True)
+
+        # read scheduling requirements
         requirements = pd.read_excel(args.requirements)
         for idx, c in cost.iterrows():
+            # schedule() requires a 1D list as input pricing
             results = sd.schedule(requirements,
                                   cost=c.to_numpy().flatten().tolist())
+            # results are returns as a 1D array of length 24 * (total number
+            # of tasks)
             results_matrix = results.x.reshape(len(results.x) // 24, 24)
+            # use the transposed matrix in order to plot the chart based on
+            # hours (instead of the tasks)
             sd.plot_consumption(results_matrix.T,
                                 os.path.join(out_path, 'figures',
                                              'fig' + str(idx) + '.png'))
@@ -124,9 +168,9 @@ def main():
             print(results.message)
             print('The minimised total cost is:  ', results.fun)
             if args.solutions:
-                pd.DataFrame(results_matrix).to_csv(os.path.join(out_path,
-                                                                 'scheduling',
-                                                                 'scheduling' + str(idx) + '.csv'))
+                pd.DataFrame(results_matrix).to_csv(
+                    os.path.join(out_path, 'scheduling',
+                                 'scheduling' + str(idx) + '.csv'))
             print('\n\n')
 
 
