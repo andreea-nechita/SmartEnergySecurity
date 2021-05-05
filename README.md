@@ -36,3 +36,13 @@ A sample [file](resources/COMP3217CW2Input.xlsx) containing the scheduling requi
 * `python sec.py -S --requirements input.xlsx -p TestingData.txt --label none` (but here, `input.xlsx` does not have a `label` column)
 
 If both `--detect` and `--scheduling` options are passed, the input price curves are first classified, then used for scheduling. The `--label` (`-l`) argument can be used in order to specify which pricing curves to be considered in scheduling the tasks: `normal`, `abnormal`, `all`, or `none` (if the pricing curves are not labelled).
+
+### `hypermodel.py`
+The [`hypermodel.py`](smart-energy-security/detector/hypermodel.py) module (within the `detector` package) can also be run as a script to tune the hyperparameters of a model given an input dataset.
+
+**Note**: Tuning a model can take a couple of hours, depending on the size of the training and validation sets. If your dataset is large (more than 10,000 samples for training and validation), you might consider optimising the model on a smaller dataset, then training it on all the data.
+
+The model provided in `resources` has already been optimised and trained.
+
+#### Example of using `hypermodel.py` script
+`hypermodel.py -d TrainingData.txt` or `hypermodel.py --data TrainingData.txt`
