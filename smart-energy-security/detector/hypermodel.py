@@ -1,5 +1,4 @@
 import argparse
-import pickle
 
 import pandas as pd
 from kerastuner import HyperModel, BayesianOptimization
@@ -7,7 +6,7 @@ from sklearn.preprocessing import MinMaxScaler
 from tensorflow.python.keras.callbacks import EarlyStopping
 from tensorflow.python.keras.layers import Conv1D, MaxPooling1D, \
     AveragePooling1D, GlobalMaxPooling1D, Dense, Dropout
-from tensorflow.python.keras.models import Sequential, load_model
+from tensorflow.python.keras.models import Sequential
 from tensorflow.python.keras.optimizer_v2.adam import Adam
 
 
@@ -26,6 +25,8 @@ class HyperDetectionModel(HyperModel):
                    activation='relu', input_shape=(24, 1), name='conv1d_0'))
 
         if hp.Boolean('pooling_0', default=True):
+            # check the input shape of this layer to decide the limits of
+            # the hyperparameters
             input_size_pooling0 = model.get_layer('conv1d_0').output.shape[1]
             if hp.Boolean('max_pooling_0', default=True):
                 model.add(MaxPooling1D(pool_size=hp.Int('max_pool_size_0',
@@ -70,6 +71,8 @@ class HyperDetectionModel(HyperModel):
                                            name='avg_pooling1d_0'))
 
         if hp.Boolean('second_conv_layer', default=True):
+            # check which is the previous layer in order to get the input
+            # size for the current layer
             if hp.get('pooling_0'):
                 if hp.get('max_pooling_0'):
                     input_size_conv1 = \
@@ -121,12 +124,13 @@ def prepare_data(data_path, frac=0.7, seed=4):
 
     :param data_path:
     :type data_path:
-    :param frac:
-    :type frac:
+    :param frac: fraction of the data to be kept for training
+    :type frac: float
     :param seed:
     :type seed:
-    :return:
-    :rtype:
+    :return: a dictionary of processed input data and labels for training,
+    validation and testing sets
+    :rtype: dict
     """
     columns = list(map(str, range(24))) + ['label']
     price_data = pd.read_table(data_path, sep=',', names=columns)
@@ -156,7 +160,17 @@ def prepare_data(data_path, frac=0.7, seed=4):
 
 
 def get_hypertuner(settings=None):
-    """
+    """Creates a BayesianOptimization tuner based on a dictionary of
+    parameter settings
+
+    The default dictionary is:
+    settings = {'objective': 'val_accuracy', 'max_trials': 40,
+                'executions_per_trial': 7, 'seed': 123,
+                'name': 'hypertuner'}
+
+    The keys correspond to the arguments with the same name passed to a
+    Keras Tuner. Check the documentation for Keras Tuners for more details
+    (https://keras-team.github.io/keras-tuner/documentation/tuners/)
 
     :param settings:
     :type settings: dict
@@ -164,7 +178,7 @@ def get_hypertuner(settings=None):
     :rtype: BayesianOptimization
     """
     if settings is None:
-        settings = {'obj': 'val_accuracy', 'max_trials': 40,
+        settings = {'objective': 'val_accuracy', 'max_trials': 40,
                     'executions_per_trial': 7, 'seed': 123,
                     'name': 'hypertuner'}
 
@@ -185,7 +199,10 @@ def get_hypertuner(settings=None):
 
 def search_hyperparameters(tuner, train, validation, epochs=150,
                            model_name='model'):
-    """
+    """Finds the best model given a Keras Tuner and the training and
+    validation data
+
+    The function saves and returns the best-performing .
 
     :param model_name: name of the best model to be saved (as path)
     :type model_name: str
@@ -207,6 +224,7 @@ def search_hyperparameters(tuner, train, validation, epochs=150,
                  validation_data=(validation_data, validation_label),
                  callbacks=[EarlyStopping(monitor='val_loss', patience=3)])
 
+    # only saves and returns the best model
     best_model = tuner.get_best_models()[0]
     best_model.save(model_name)
 
@@ -214,31 +232,28 @@ def search_hyperparameters(tuner, train, validation, epochs=150,
 
 
 def classify_price(model, prices):
+    """Returns a list of binary classes (0 or 1) predicted by a model for
+    the given pricing curves
+
+    :param model:
+    :type model:
+    :param prices:
+    :type prices:
+    :return:
+    :rtype:
+    """
+    # use a 50% threshold for deciding the label
     results = (model.predict(prices) > 0.5).astype("int8")
     return results
 
 
 if __name__ == '__main__':
-    ap = argparse.ArgumentParser()
-    ap.add_argument('-p', '--predict', action='store_true',
-                    help='predict unlabelled data')
-    ap.add_argument('-d', '--data', type=str,
-                    help='file containing pricing data')
-    ap.add_argument('-s', '--scaler', type=str,
-                    help='pickle file containing the scaler for the data')
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--data', type=str,
+                        help='file containing pricing data')
+    args = parser.parse_args()
 
-    if args.predict:
-        model = load_model('model')
-        scaler = pickle.load(open(args.scaler, 'rb'))
-        price_data = pd.read_table(args.data, sep=',')
-        scaled_data = scaler.transform(price_data)
-        prediction = classify_price(model,
-                                    scaled_data.reshape(scaled_data.shape[0],
-                                                        24, 1))
-
-    else:
-        data_dict = prepare_data(args.data)
-        tuner = get_hypertuner()
-        best_model = search_hyperparameters(tuner, data_dict['train'],
-                                            data_dict['validation'])
+    data_dict = prepare_data(args.data)
+    tuner = get_hypertuner()
+    best_model = search_hyperparameters(tuner, data_dict['train'],
+                                        data_dict['validation'])
