@@ -71,11 +71,11 @@ def main():
                                                             sys.argv or '-D'
                                                             in sys.argv),
                                help='file containing pricing')
-    schedule_args.add_argument('-l', '--label',
+    schedule_args.add_argument('-l', '--label', type=str,
                                choices=['none', 'normal', 'abnormal', 'all'],
-                               required='--schedule' in sys.argv or '-S' in
-                                        sys.argv,
-                               default='all')
+                               required=False, default='all')
+    schedule_args.add_argument('--solutions', action='store_true',
+                               required=False)
 
     args = parser.parse_args()
 
@@ -95,6 +95,8 @@ def main():
 
     if args.schedule:
         os.mkdir(os.path.join(out_path, 'figures'))
+        if args.solutions:
+            os.mkdir(os.path.join(out_path, 'scheduling'))
         if args.pricing:
             columns = list(map(str, range(24)))
             if args.label != 'none':
@@ -103,9 +105,11 @@ def main():
         elif args.detect:
             cost = predicted_data
         if args.label == 'normal':
-            cost = cost.loc[cost['label'] == 0]
+            #cost = cost.loc[cost['label'] == 0]
+            cost.drop(cost.loc[cost['label'] != 0].index, inplace=True)
         elif args.label == 'abnormal':
-            cost = cost.loc[cost['label'] == 1]
+            #cost = cost.loc[cost['label'] == 1]
+            cost.drop(cost.loc[cost['label'] != 1].index, inplace=True)
         if 'label' in cost.columns:
             cost.drop(columns=['label'], inplace=True)
         requirements = pd.read_excel(args.requirements)
@@ -116,7 +120,14 @@ def main():
             sd.plot_consumption(results_matrix.T,
                                 os.path.join(out_path, 'figures',
                                              'fig' + str(idx) + '.png'))
-            print(results)
+            print('#' * 55, '\n')
+            print(results.message)
+            print('The minimised total cost is:  ', results.fun)
+            if args.solutions:
+                pd.DataFrame(results_matrix).to_csv(os.path.join(out_path,
+                                                                 'scheduling',
+                                                                 'scheduling' + str(idx) + '.csv'))
+            print('\n\n')
 
 
 if __name__ == '__main__':
