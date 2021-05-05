@@ -83,7 +83,7 @@ def main():
         prediction = hm.classify_price(model, scaled_data.reshape(
             scaled_data.shape[0], 24, 1)).flatten()
         predicted_data = pd.concat([price_data, pd.Series(prediction)], axis=1)
-        predicted_data.to_csv('results.txt', header=False, index=False)
+        predicted_data.to_csv('TestingResults.txt', header=False, index=False)
 
     if args.schedule:
         if args.pricing:
@@ -98,12 +98,8 @@ def main():
             results = sd.schedule(requirements,
                                   cost=c.to_numpy().flatten().tolist())
             results_matrix = results.x.reshape(len(results.x) // 24, 24)
-            sd.plot_consumption(results_matrix, 'fig' + str(
-                idx) + '.png')  # print(c.iloc[[1]].to_numpy().flatten(
-            # ).reshape(24, 1))  # results = sd.schedule(requirements,
-            # cost=c.iloc[[1]].to_numpy(  # ).flatten().tolist())  #
-            # results_matrix = results.x.reshape(len(  # results.x) // 24,
-            # 24)  # sd.plot_consumption(results_matrix,   # 'fig.png')
+            sd.plot_consumption(results_matrix.T, 'fig' + str(idx) + '.png')
+            print(results)
 
 
 if __name__ == '__main__':
