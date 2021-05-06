@@ -6,6 +6,7 @@
 **SmartEnergySecurity** is 100% built in Python and run via the command-line interface (CLI), which means the installation and deployment are straightforward. Plus, it comes with all the required resources (apart from external dependencies). Set it up in a matter of seconds and you're ready to use it!
 
 ## Installation
+The package includes a `setup.py` file for installation. In order to install the package, run `python setup.py install` from the directory where `setup.py` is located.
 
 ## Usage
 The main runner script is [`sec.py`](smart-energy-security/sec.py) (abbreviation of SmartEnergySecurity), which can be used in `--detect` (`-D`), `--schedule`(`-S`) or both of them.
